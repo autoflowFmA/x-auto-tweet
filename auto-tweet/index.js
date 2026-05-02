@@ -4,8 +4,9 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { TwitterApi } = require("twitter-api-v2");
 const { getSystemPrompt, getUserPrompt } = require("./prompt");
 
-const TWEET_MIN = 200;
-const TWEET_MAX = 280;
+// X アカウントの一時的な文字数制限に合わせて調整（通常時は200〜280）
+const TWEET_MIN = 100;
+const TWEET_MAX = 155;
 
 async function generateTweet() {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
