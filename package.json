@@ -5,6 +5,7 @@
   "main": "auto-tweet/index.js",
   "scripts": {
     "start": "node auto-tweet/index.js",
+    "like": "node auto-like/index.js",
     "test": "node auto-tweet/index.js"
   },
   "engines": {

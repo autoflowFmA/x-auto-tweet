@@ -83,8 +83,23 @@ npm start
 
 ### 自動実行スケジュール
 
-毎日 **JST 9:00**（UTC 0:00）に自動実行されます。  
+ツイート投稿は毎日 **JST 9:00 / 13:00 / 20:00** に自動実行されます。  
 手動実行する場合は GitHub の **Actions タブ → Daily Auto Tweet → Run workflow** から実行できます。
+
+### 自動いいね・リポスト
+
+`auto-like/index.js` はAIツール関連のツイートを検索し、`Zen727Z6132` アカウントでいいね・リポストします。
+
+- キーワード：`AI`、`ChatGPT`、`Claude`、`Gemini`、`AIツール`、`人工知能`
+- いいね：1時間ごとに最大2件（1日最大48件）
+- リポスト：3時間ごとに最大1件（1日最大8件）
+- 実行：GitHub Actions の `Hourly Auto Like And Repost` が1時間おきに実行
+
+ローカルで確認する場合：
+
+```bash
+DRY_RUN=true npm run like
+```
 
 ---
 
@@ -92,11 +107,14 @@ npm start
 
 ```
 x-auto-tweet/
+├── auto-like/
+│   └── index.js       # AIツール関連ツイートへの自動いいね・リポスト
 ├── auto-tweet/
 │   ├── index.js       # メイン処理（生成 → 投稿）
 │   └── prompt.js      # Geminiへのプロンプト・トピック一覧
 ├── .github/
 │   └── workflows/
+│       ├── like.yml   # 自動いいね・リポスト用ワークフロー
 │       └── tweet.yml  # GitHub Actions ワークフロー
 ├── .env.example       # 環境変数の雛形
 ├── .gitignore
