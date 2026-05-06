@@ -90,15 +90,23 @@ npm start
 
 `auto-like/index.js` はAIツール関連のツイートを検索し、`Zen727Z6132` アカウントでいいね・リポストします。
 
-- キーワード：`AI`、`ChatGPT`、`Claude`、`Gemini`、`AIツール`、`人工知能`
+- キーワード：`AIツール`、`ChatGPT`、`Claude`、`Gemini`、`AI副業`
 - いいね：1時間ごとに最大2件（1日最大48件）
-- リポスト：3時間ごとに最大1件（1日最大8件）
+- リポスト：1時間ごとに最大1件
 - 実行：GitHub Actions の `Hourly Auto Like And Repost` が1時間おきに実行
+- リポストフィルター：`AIツール`、`ChatGPT`、`Claude`、`Gemini`、`AI副業`、`コスト比較`、料金比較系に明確に関係する投稿だけ対象
+- 除外：検索後にも本文を再チェックし、無関係な投稿や占い・恋愛・懸賞系の投稿を除外
 
 ローカルで確認する場合：
 
 ```bash
 DRY_RUN=true npm run like
+```
+
+リポスト処理まで検証する場合：
+
+```bash
+DRY_RUN=true AUTO_REPOST_FORCE=true npm run like
 ```
 
 ---

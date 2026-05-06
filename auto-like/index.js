@@ -2,10 +2,43 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 
 const { TwitterApi } = require("twitter-api-v2");
 
-const KEYWORDS = ["AI", "ChatGPT", "Claude", "Gemini", "AIツール", "人工知能"];
+const SEARCH_KEYWORDS = ["AIツール", "ChatGPT", "Claude", "Gemini", "AI副業"];
+const RELEVANT_PATTERNS = [
+  /AIツール/i,
+  /ChatGPT/i,
+  /Claude/i,
+  /Gemini/i,
+  /AI副業/i,
+  /生成AI/i,
+  /LLM/i,
+  /プロンプト/i,
+];
+const REPOST_PATTERNS = [
+  /AIツール/i,
+  /ChatGPT/i,
+  /Claude/i,
+  /Gemini/i,
+  /AI副業/i,
+  /コスト比較/i,
+  /料金比較/i,
+  /費用対効果/i,
+  /月額/i,
+  /API料金/i,
+];
+const EXCLUDED_PATTERNS = [
+  /占い/,
+  /星座/,
+  /恋愛/,
+  /出会い/,
+  /アダルト/,
+  /懸賞/,
+  /プレゼント企画/,
+  /Giveaway/i,
+];
 const MAX_LIKES_PER_RUN = Number(process.env.AUTO_LIKE_MAX_PER_RUN ?? 2);
 const MAX_REPOSTS_PER_RUN = Number(process.env.AUTO_REPOST_MAX_PER_RUN ?? 1);
 const DRY_RUN = process.env.DRY_RUN === "true";
+const FORCE_REPOST = process.env.AUTO_REPOST_FORCE === "true";
 
 function createClient() {
   return new TwitterApi({
@@ -17,21 +50,40 @@ function createClient() {
 }
 
 function createSearchQuery() {
-  const keyword = KEYWORDS[Math.floor(Math.random() * KEYWORDS.length)];
+  const keyword = SEARCH_KEYWORDS[Math.floor(Math.random() * SEARCH_KEYWORDS.length)];
   return `("${keyword}") lang:ja -is:retweet -is:reply -has:links`;
 }
 
 function shouldRepostNow(date = new Date()) {
-  const jstHour = Number(
-    new Intl.DateTimeFormat("ja-JP", {
-      timeZone: "Asia/Tokyo",
-      hour: "2-digit",
-      hour12: false,
-    }).format(date)
-  );
+  if (FORCE_REPOST) return true;
 
-  // 3時間おきに最大1件リポストすることで、1日最大8件に抑える。
-  return jstHour % 3 === 0;
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hourPart = parts.find((part) => part.type === "hour")?.value ?? "0";
+  const jstHour = Number(hourPart);
+  console.log(`JST時: ${jstHour}`);
+
+  // GitHub Actionsが1時間おきに起動するため、毎回リポストを1件試行する。
+  return true;
+}
+
+function isRelevantTweet(tweet) {
+  const text = tweet.text ?? "";
+  const hasRelevantKeyword = RELEVANT_PATTERNS.some((pattern) => pattern.test(text));
+  const hasExcludedKeyword = EXCLUDED_PATTERNS.some((pattern) => pattern.test(text));
+
+  return hasRelevantKeyword && !hasExcludedKeyword;
+}
+
+function isRepostEligibleTweet(tweet) {
+  const text = tweet.text ?? "";
+  const hasRepostKeyword = REPOST_PATTERNS.some((pattern) => pattern.test(text));
+  const hasExcludedKeyword = EXCLUDED_PATTERNS.some((pattern) => pattern.test(text));
+
+  return hasRepostKeyword && !hasExcludedKeyword;
 }
 
 async function getCandidateTweets(client) {
@@ -39,12 +91,18 @@ async function getCandidateTweets(client) {
   console.log(`検索クエリ: ${query}`);
 
   const paginator = await client.readOnly.v2.search(query, {
-    max_results: 10,
+    max_results: 20,
     sort_order: "recency",
-    "tweet.fields": ["author_id", "created_at", "lang"],
+    "tweet.fields": ["author_id", "created_at", "lang", "text"],
   });
 
-  return paginator.tweets ?? [];
+  return (paginator.tweets ?? []).filter((tweet) => {
+    const relevant = isRelevantTweet(tweet);
+    if (!relevant) {
+      console.log(`除外: ${tweet.id} (${tweet.text?.slice(0, 60) ?? "本文なし"}...)`);
+    }
+    return relevant;
+  });
 }
 
 async function likeTweet(client, userId, tweet) {
@@ -94,19 +152,28 @@ async function main() {
     }
     if (tweet.author_id === userId) continue;
 
-    try {
-      if (likedCount < MAX_LIKES_PER_RUN) {
+    if (canRepost && repostedCount < MAX_REPOSTS_PER_RUN) {
+      if (!isRepostEligibleTweet(tweet)) {
+        console.log(`リポスト対象外: ${tweet.id} (${tweet.text?.slice(0, 60) ?? "本文なし"}...)`);
+      } else {
+        try {
+          const reposted = await repostTweet(client, userId, tweet);
+          if (reposted) repostedCount += 1;
+        } catch (e) {
+          const detail = e.data?.detail ?? e.message;
+          console.warn(`リポストをスキップ: ${tweet.id} (${detail})`);
+        }
+      }
+    }
+
+    if (likedCount < MAX_LIKES_PER_RUN) {
+      try {
         const liked = await likeTweet(client, userId, tweet);
         if (liked) likedCount += 1;
+      } catch (e) {
+        const detail = e.data?.detail ?? e.message;
+        console.warn(`いいねをスキップ: ${tweet.id} (${detail})`);
       }
-
-      if (canRepost && repostedCount < MAX_REPOSTS_PER_RUN) {
-        const reposted = await repostTweet(client, userId, tweet);
-        if (reposted) repostedCount += 1;
-      }
-    } catch (e) {
-      const detail = e.data?.detail ?? e.message;
-      console.warn(`スキップ: ${tweet.id} (${detail})`);
     }
   }
 
