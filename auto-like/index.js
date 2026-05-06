@@ -2,7 +2,8 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 
 const { TwitterApi } = require("twitter-api-v2");
 
-const SEARCH_KEYWORDS = ["AIツール", "ChatGPT", "Claude", "Gemini", "AI副業"];
+const SEARCH_QUERY =
+  '(("AIツール" OR "ChatGPT" OR "Claude" OR "Gemini" OR "AI副業") ("コスト比較" OR "料金比較" OR "費用対効果" OR "月額" OR "API料金" OR "比較" OR "コスト" OR "稼ぐ" OR "収益" OR "案件" OR "自動化")) lang:ja -is:retweet -is:reply -has:links';
 const RELEVANT_PATTERNS = [
   /AIツール/i,
   /ChatGPT/i,
@@ -13,17 +14,28 @@ const RELEVANT_PATTERNS = [
   /LLM/i,
   /プロンプト/i,
 ];
-const REPOST_PATTERNS = [
+const REPOST_TOOL_PATTERNS = [
   /AIツール/i,
   /ChatGPT/i,
   /Claude/i,
   /Gemini/i,
   /AI副業/i,
+];
+const REPOST_CONTEXT_PATTERNS = [
   /コスト比較/i,
+  /コスト/i,
   /料金比較/i,
+  /料金/i,
+  /価格/i,
   /費用対効果/i,
+  /費用/i,
   /月額/i,
   /API料金/i,
+  /比較/i,
+];
+const REPOST_SIDE_BUSINESS_PATTERNS = [
+  /AI副業.*(稼|収益|案件|副収入|ツール|自動化|ChatGPT|Claude|Gemini|作業|効率)/i,
+  /(稼|収益|案件|副収入|ツール|自動化|ChatGPT|Claude|Gemini|作業|効率).*AI副業/i,
 ];
 const EXCLUDED_PATTERNS = [
   /占い/,
@@ -50,8 +62,7 @@ function createClient() {
 }
 
 function createSearchQuery() {
-  const keyword = SEARCH_KEYWORDS[Math.floor(Math.random() * SEARCH_KEYWORDS.length)];
-  return `("${keyword}") lang:ja -is:retweet -is:reply -has:links`;
+  return SEARCH_QUERY;
 }
 
 function shouldRepostNow(date = new Date()) {
@@ -80,10 +91,12 @@ function isRelevantTweet(tweet) {
 
 function isRepostEligibleTweet(tweet) {
   const text = tweet.text ?? "";
-  const hasRepostKeyword = REPOST_PATTERNS.some((pattern) => pattern.test(text));
+  const hasToolKeyword = REPOST_TOOL_PATTERNS.some((pattern) => pattern.test(text));
+  const hasContextKeyword = REPOST_CONTEXT_PATTERNS.some((pattern) => pattern.test(text));
+  const hasSideBusinessContext = REPOST_SIDE_BUSINESS_PATTERNS.some((pattern) => pattern.test(text));
   const hasExcludedKeyword = EXCLUDED_PATTERNS.some((pattern) => pattern.test(text));
 
-  return hasRepostKeyword && !hasExcludedKeyword;
+  return !hasExcludedKeyword && ((hasToolKeyword && hasContextKeyword) || hasSideBusinessContext);
 }
 
 async function getCandidateTweets(client) {
@@ -117,13 +130,14 @@ async function likeTweet(client, userId, tweet) {
 }
 
 async function repostTweet(client, userId, tweet) {
+  const preview = (tweet.text ?? "").replace(/\s+/g, " ").slice(0, 100);
   if (DRY_RUN) {
-    console.log(`[DRY_RUN] リポスト予定: https://x.com/i/web/status/${tweet.id}`);
+    console.log(`[DRY_RUN] リポスト予定: https://x.com/i/web/status/${tweet.id} (${preview}...)`);
     return true;
   }
 
   await client.readWrite.v2.retweet(userId, tweet.id);
-  console.log(`リポスト完了: https://x.com/i/web/status/${tweet.id}`);
+  console.log(`リポスト完了: https://x.com/i/web/status/${tweet.id} (${preview}...)`);
   return true;
 }
 
